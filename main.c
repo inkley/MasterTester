@@ -82,7 +82,6 @@ char PrintMsg[255];
 #define icmdFlashSetSampleSize  06 // Set flash sample size.
 #define icmdFlashStatus         07 // Get Status of flash reading. Read percent 100 means done.
 
-
 int TimeOutClock = 0;
 int I2C_TimeOutClock = 0;
 
@@ -116,7 +115,6 @@ bool bit_check(uint32_t number,uint32_t bit)
     return (number >> bit) & (uint32_t)1;
 }
 
-
 //*****************************************************************************
 //
 // The interrupt handler for the for Systick interrupt.
@@ -144,8 +142,6 @@ I2C0SlaveIntHandler(void)
 
 void Init_Systick (void)
 {
-
-
     SysTickPeriodSet(SysCtlClockGet()/SYSTICK_TIMING); //Set SYSTICK to interrupt every 1mS
 
     //
@@ -233,11 +229,7 @@ void Init_I2C(void)
         // I2CMasterSlaveAddrSet function.
         //
         I2CSlaveInit(I2C0_BASE, SLAVE_ADDRESS);
-
-
-
 }
-
 
 uint32_t CANSendINT(unsigned long CANID, uint32_t pui8MsgData)
 {
@@ -253,7 +245,6 @@ uint32_t CANSendINT(unsigned long CANID, uint32_t pui8MsgData)
 
         TimeOut=0;
         CANMessageSet(CAN0_BASE, 32, &sCANMessage, MSG_OBJ_TYPE_TX);
-
 
         while(CANStatusGet(CAN0_BASE,CAN_STS_TXREQUEST) !=0)
         {
@@ -281,7 +272,6 @@ uint32_t CANSendMSG(unsigned long CANID, uint8_t *pui8MsgData)
         TimeOut=0;
         CANMessageSet(CAN0_BASE, 32, &sCANMessage, MSG_OBJ_TYPE_TX);
 
-
         while(CANStatusGet(CAN0_BASE,CAN_STS_TXREQUEST) !=0)
         {
                 TimeOut++;
@@ -297,7 +287,6 @@ uint32_t CANSendMSG(unsigned long CANID, uint8_t *pui8MsgData)
 
 uint32_t CANPollCheck(unsigned char *candata,int MsgID,unsigned char Response)
 {
-
     int rValue=0;
     uint32_t ulNewData;
 
@@ -317,7 +306,6 @@ uint32_t CANPollCheck(unsigned char *candata,int MsgID,unsigned char Response)
            rValue++;
            ulNewData = CANStatusGet(CAN0_BASE, CAN_STS_NEWDAT);
      }
-
     return rValue;
 }
 
@@ -330,7 +318,6 @@ void IntCAN0Handler(void)
 
     tempCANMsgObject.pui8MsgData = CANMsg;
     tempCANMsgObject.ui32MsgLen=8;
-
 
     ulStatus = CANIntStatus(CAN0_BASE, CAN_INT_STS_CAUSE);
     CANIntClear(CAN0_BASE, ulStatus);
@@ -453,7 +440,6 @@ void Init_CAN(uint32_t Baud)
 
 void I2C_SendData(uint32_t SData)
 {
-
     I2CMasterSlaveAddrSet(I2C0_BASE, SLAVE_ADDRESS, false);
 
     I2CMasterDataPut(I2C0_BASE, (uint8_t)(SData >> 24));
@@ -535,7 +521,6 @@ char *UARTStrGet()
 
 void SendMenu(void)
 {
-
     UARTStrPut("\r\nInkley Sensor Controller Online.\r\n");
     UARTStrPut("\r\n");
 
@@ -561,6 +546,7 @@ void SendMenu(void)
     UARTStrPut("\r\n\r\n");
     UARTCharPut(UART0_BASE,'>');
 }
+
 void UARTClearScreen(void)
 {
     char clrBuf[10];
@@ -577,19 +563,14 @@ void UARTClearScreen(void)
 
 int main(void)
 {
-
     char CAN_RECV_DATA[20];
     uint8_t CAN_MSG[8];
     uint32_t SampleValue=0;
     uint8_t CMD_RESPID=0;
 
-
-
-    SysCtlClockSet(SYSCTL_SYSDIV_2_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN |
-              SYSCTL_XTAL_16MHZ);
+    SysCtlClockSet(SYSCTL_SYSDIV_2_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
     SystemClockSpeed = SysCtlClockGet();
-
 
     Init_Systick();
     Init_UART(115200);
@@ -608,13 +589,13 @@ int main(void)
 
 /*
 //Inkley Sensor Commands
-#define icmdReadVersion         01 // Read Version
-#define icmdReadData            02 // Sensor Read Data
-#define icmdFlashStart          03 // Start recording data into flash
-#define icmdFlashReadPos        04 // Read Flash at position
-#define icmdFlashEraseFull      05 // Erase Flash
-#define icmdFlashSetSampleSize  06 //Set flash sample size.
-#define icmdFlashStatus         07// Get Status of flash reading. Read percent 100 means done.
+#define icmdReadVersion         01  // Read Version
+#define icmdReadData            02  // Sensor Read Data
+#define icmdFlashStart          03  // Start recording data into flash
+#define icmdFlashReadPos        04  // Read Flash at position
+#define icmdFlashEraseFull      05  // Erase Flash
+#define icmdFlashSetSampleSize  06  // Set flash sample size.
+#define icmdFlashStatus         07  // Get Status of flash reading. Read percent 100 means done.
 */
     while(1)
     {
@@ -793,10 +774,7 @@ int main(void)
                     break;
 
             }
-
-
             CAN_RECV.FLAGS = bit_clear(CAN_RECV.FLAGS,CAN_F_NEW);
-
         }
         if(bit_check(CAN_RECV.FLAGS,CAN_F_OVERRUN))
         {
