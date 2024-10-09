@@ -1,7 +1,13 @@
-//-----------------------------------------------
-//
-//
-//----------------------------------------------
+/*
+ Author:    Jerry Black
+ User:      Tyler Inkley
+
+Inkley_MasterTester
+• Evaluation board acts as a host on one side of the CAN bus
+• Later may be single board computer that runs all other modules or diagnostics computer, etc.
+• Contains serial interface, allows you to run a few commands to the sensor module on the other end of the CAN bus
+ */
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
