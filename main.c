@@ -3,17 +3,13 @@
  User:      Tyler Inkley
 
 Inkley_MasterTester
-• The evaluation board acts as a CAN bus host, sending commands and receiving data
-  from a sensor module on the other end of the CAN bus.
-• It can also function as a diagnostic tool or controller in future implementations,
-  such as a single-board computer managing other modules.
-• A serial interface (UART) is used to interact with the system via a user menu,
-  allowing the user to send commands such as reading sensor data, recording data
-  to flash memory, and erasing flash.
-• Commands include operations to read sensor versions, start/stop data recordings,
-  and manage flash memory.
-• The system is equipped to receive and respond to CAN messages, process responses,
-  and handle CAN bus interrupts.
+
+• The evaluation board acts as a CAN bus host, sending commands and receiving data from a sensor module on the other end of the CAN bus.
+• It can also function as a diagnostic tool or controller in future implementations, such as a single-board computer managing other modules.
+• A serial interface (UART) is used to interact with the system via a user menu.
+• Allows the user to send commands such as reading sensor data, recording data to flash memory, and erasing flash.
+• Commands include operations to read sensor versions, start/stop data recordings, and manage flash memory.
+• The system is equipped to receive and respond to CAN messages, process responses, and handle CAN bus interrupts.
 • The code initializes and manages communication through UART, I2C, and CAN interfaces.
  */
 
