@@ -2,7 +2,9 @@
 # Automatically-generated file. Do not edit!
 ################################################################################
 
-CG_TOOL_ROOT := /Applications/ti/ccs1240/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS
+SHELL = cmd.exe
+
+CG_TOOL_ROOT := D:/ti/ccs1260/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS
 
 GEN_OPTS__FLAG := 
 GEN_CMDS__FLAG := 
@@ -49,8 +51,8 @@ $(GEN_CMDS__FLAG) \
 
 -include ../makefile.init
 
-RM := rm -rf
-RMDIR := rm -rf
+RM := DEL /F
+RMDIR := RMDIR /S/Q
 
 # All of the sources participating in the build are defined here
 -include sources.mk
@@ -176,15 +178,15 @@ all: $(OBJS) $(CMD_SRCS) $(LIB_SRCS) $(A_SRCS) $(GEN_CMDS)
 Inkley_MasterTester.out: $(OBJS) $(CMD_SRCS) $(LIB_SRCS) $(A_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: Arm Linker'
-	"/Applications/ti/ccs1240/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me --define=ccs="ccs" --define=PART_TM4C123GE6PM -g --gcc --diag_warning=225 --diag_wrap=off --display_error_number --abi=eabi -z -m"Inkley_MasterTester.map" --heap_size=0 --stack_size=2048 -i"/Applications/ti/ccs1240/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/lib" -i"/Users/Tyler/workspace_v12/SDK" -i"/Applications/ti/ccs1240/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="Inkley_MasterTester_linkInfo.xml" --rom_model -o "Inkley_MasterTester.out" $(ORDERED_OBJS) $(A_SRCS)
+	"D:/ti/ccs1260/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me --define=ccs="ccs" --define=PART_TM4C123GE6PM -g --gcc --diag_warning=225 --diag_wrap=off --display_error_number --abi=eabi -z -m"Inkley_MasterTester.map" --heap_size=0 --stack_size=2048 -i"D:/ti/ccs1260/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/lib" -i"D:/00FreeLancing/Upwork/Tyler Inkley/CCS/SDK" -i"D:/ti/ccs1260/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="Inkley_MasterTester_linkInfo.xml" --rom_model -o "Inkley_MasterTester.out" $(ORDERED_OBJS) $(A_SRCS)
 	@echo 'Finished building target: "$@"'
 	@echo ' '
 
 # Other Targets
 clean:
 	-$(RM) $(EXE_OUTPUTS__QUOTED)
-	-$(RM) "main.obj" "tm4c123ge6pm_startup_ccs.obj" "driverlib/adc.obj" "driverlib/aes.obj" "driverlib/can.obj" "driverlib/comp.obj" "driverlib/cpu.obj" "driverlib/crc.obj" "driverlib/des.obj" "driverlib/eeprom.obj" "driverlib/emac.obj" "driverlib/epi.obj" "driverlib/flash.obj" "driverlib/fpu.obj" "driverlib/gpio.obj" "driverlib/hibernate.obj" "driverlib/i2c.obj" "driverlib/interrupt.obj" "driverlib/lcd.obj" "driverlib/mpu.obj" "driverlib/pwm.obj" "driverlib/qei.obj" "driverlib/shamd5.obj" "driverlib/ssi.obj" "driverlib/sw_crc.obj" "driverlib/sysctl.obj" "driverlib/sysexc.obj" "driverlib/systick.obj" "driverlib/timer.obj" "driverlib/uart.obj" "driverlib/udma.obj" "driverlib/usb.obj" "driverlib/watchdog.obj" 
-	-$(RM) "main.d" "tm4c123ge6pm_startup_ccs.d" "driverlib/adc.d" "driverlib/aes.d" "driverlib/can.d" "driverlib/comp.d" "driverlib/cpu.d" "driverlib/crc.d" "driverlib/des.d" "driverlib/eeprom.d" "driverlib/emac.d" "driverlib/epi.d" "driverlib/flash.d" "driverlib/fpu.d" "driverlib/gpio.d" "driverlib/hibernate.d" "driverlib/i2c.d" "driverlib/interrupt.d" "driverlib/lcd.d" "driverlib/mpu.d" "driverlib/pwm.d" "driverlib/qei.d" "driverlib/shamd5.d" "driverlib/ssi.d" "driverlib/sw_crc.d" "driverlib/sysctl.d" "driverlib/sysexc.d" "driverlib/systick.d" "driverlib/timer.d" "driverlib/uart.d" "driverlib/udma.d" "driverlib/usb.d" "driverlib/watchdog.d" 
+	-$(RM) "main.obj" "tm4c123ge6pm_startup_ccs.obj" "driverlib\adc.obj" "driverlib\aes.obj" "driverlib\can.obj" "driverlib\comp.obj" "driverlib\cpu.obj" "driverlib\crc.obj" "driverlib\des.obj" "driverlib\eeprom.obj" "driverlib\emac.obj" "driverlib\epi.obj" "driverlib\flash.obj" "driverlib\fpu.obj" "driverlib\gpio.obj" "driverlib\hibernate.obj" "driverlib\i2c.obj" "driverlib\interrupt.obj" "driverlib\lcd.obj" "driverlib\mpu.obj" "driverlib\pwm.obj" "driverlib\qei.obj" "driverlib\shamd5.obj" "driverlib\ssi.obj" "driverlib\sw_crc.obj" "driverlib\sysctl.obj" "driverlib\sysexc.obj" "driverlib\systick.obj" "driverlib\timer.obj" "driverlib\uart.obj" "driverlib\udma.obj" "driverlib\usb.obj" "driverlib\watchdog.obj" 
+	-$(RM) "main.d" "tm4c123ge6pm_startup_ccs.d" "driverlib\adc.d" "driverlib\aes.d" "driverlib\can.d" "driverlib\comp.d" "driverlib\cpu.d" "driverlib\crc.d" "driverlib\des.d" "driverlib\eeprom.d" "driverlib\emac.d" "driverlib\epi.d" "driverlib\flash.d" "driverlib\fpu.d" "driverlib\gpio.d" "driverlib\hibernate.d" "driverlib\i2c.d" "driverlib\interrupt.d" "driverlib\lcd.d" "driverlib\mpu.d" "driverlib\pwm.d" "driverlib\qei.d" "driverlib\shamd5.d" "driverlib\ssi.d" "driverlib\sw_crc.d" "driverlib\sysctl.d" "driverlib\sysexc.d" "driverlib\systick.d" "driverlib\timer.d" "driverlib\uart.d" "driverlib\udma.d" "driverlib\usb.d" "driverlib\watchdog.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

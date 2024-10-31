@@ -29,6 +29,7 @@ main.obj: ../driverlib/uart.h
 main.obj: ../driverlib/i2c.h
 main.obj: ../driverlib/systick.h
 main.obj: D:/00FreeLancing/Upwork/Tyler\ Inkley/CCS/SDK/utils/uartstdio.h
+main.obj: ../driverlib/flash.h
 
 ../main.c:
 
@@ -87,4 +88,6 @@ D:/00FreeLancing/Upwork/Tyler\ Inkley/CCS/SDK/inc/hw_i2c.h:
 ../driverlib/systick.h:
 
 D:/00FreeLancing/Upwork/Tyler\ Inkley/CCS/SDK/utils/uartstdio.h:
+
+../driverlib/flash.h:
 
