@@ -133,15 +133,15 @@ char PrintMsg[255];
 */
 
 enum {
-    icmdReadVersion = 0x01,         // Read sensor firmware version.
-    icmdReadData,                   // Retrieve current sensor data.
-    icmdFlashStart,                 // Start recording data into flash memory.
-    icmdFlashReadPos,               // Read data from a specific flash memory position.
-    icmdFlashEraseFull,             // Erase all data in flash memory.
-    icmdFlashSetSampleSize,         // Set the size of samples to store in flash.
-    icmdFlashStatus,                // Retrieve flash memory operation status.
-    icmdFlashGetData,               // Fetch raw data from flash memory.
-    icmdFlashGenCSV                 // Generate CSV-formatted output from flash data.
+    icmdReadVersion = 0x01,         // Read sensor firmware version
+    icmdReadData,                   // Retrieve current sensor data
+    icmdFlashStart,                 // Start recording data into flash memory
+    icmdFlashReadPos,               // Read data from a specific flash memory position
+    icmdFlashEraseFull,             // Erase all data in flash memory
+    icmdFlashSetSampleSize,         // Set the size of samples to store in flash
+    icmdFlashStatus,                // Retrieve flash memory operation status
+    icmdFlashGetData,               // Fetch raw data from flash memory
+    icmdFlashGenCSV                 // Generate CSV-formatted output from flash data
 };
 
 int TimeOutClock = 0;               // Global variable to track timeout events
