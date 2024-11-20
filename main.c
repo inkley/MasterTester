@@ -4,13 +4,13 @@
 
 Inkley_MasterTester
 
-• The evaluation board acts as a CAN bus host, sending commands and receiving data from a sensor module on the other end of the CAN bus.
-• It can also function as a diagnostic tool or controller in future implementations, such as a single-board computer managing other modules.
-• A serial interface (UART) is used to interact with the system via a user menu.
-• Allows the user to send commands such as reading sensor data, recording data to flash memory, and erasing flash.
-• Commands include operations to read sensor versions, start/stop data recordings, and manage flash memory.
-• The system is equipped to receive and respond to CAN messages, process responses, and handle CAN bus interrupts.
-• The code initializes and manages communication through UART, I2C, and CAN interfaces.
+• The evaluation board acts as a CAN bus host, sending commands and receiving data from a sensor module on the other end of the CAN bus
+• It can also function as a diagnostic tool or controller in future implementations, such as a single-board computer managing other modules
+• A serial interface (UART) is used to interact with the system via a user menu
+• Allows the user to send commands such as reading sensor data, recording data to flash memory, and erasing flash
+• Commands include operations to read sensor versions, start/stop data recordings, and manage flash memory
+• The system is equipped to receive and respond to CAN messages, process responses, and handle CAN bus interrupts
+• The code initializes and manages communication through UART, I2C, and CAN interfaces
  */
 
 //*****************************************************************************
@@ -41,6 +41,7 @@ Inkley_MasterTester
 #include "driverlib/uart.h"         // UART driver library
 #include "driverlib/i2c.h"          // I2C driver library
 #include "driverlib/systick.h"      // SysTick timer driver library
+#include "driverlib/flash.h"        // Flash memory driver library (for storing sensor data)
 
 // Utility libraries for Tiva C Series
 #include "utils/uartstdio.h"        // UART standard I/O utility functions
@@ -65,6 +66,10 @@ Inkley_MasterTester
 #define SerialBAUD  115200          // Baud rate for UART communication (115200 bps)
 char RcvString[1024];               // Global buffer for receiving serial data
 
+// Flash Settings
+#define FlashUserSpace  0x30000     // Starting address for flash memory user space
+uint32_t FlashSampleSize = 0x10000; // Default sample size for flash memory (64 KB)
+
 // CAN Bus Settings
 #define CAN_ID             0x101    // CAN bus ID for the main module
 #define CAN_SENSOR_ID      0x107    // CAN bus ID for the sensor module
@@ -80,6 +85,9 @@ unsigned short CANLastDetected = 0xffff;
 
 // System clock speed in Hz (80 MHz)
 uint32_t SystemClockSpeed = 80000000;
+
+// Global Timer: Tracks system's elasped time in ms
+uint32_t GlobalTimer = 0;
 
 // Structure to hold a CAN message
 typedef struct {
@@ -112,6 +120,7 @@ char PrintMsg[255];
 //*****************************************************************************
 
 // Inkley Sensor Commands
+/*
 #define icmdReadVersion         01  // Command to read the version of the sensor
 #define icmdReadData            02  // Command to read sensor data
 #define icmdFlashStart          03  // Command to start recording data into flash memory
@@ -119,6 +128,21 @@ char PrintMsg[255];
 #define icmdFlashEraseFull      05  // Command to erase the entire flash memory
 #define icmdFlashSetSampleSize  06  // Command to set the sample size for flash memory
 #define icmdFlashStatus         07  // Command to get the status of the flash memory read (e.g., percentage complete)
+#define icmdFlashGetData        08  // Get Flash sample from sensor module and store it locally
+#define icmdFlashGenCSV         09  // Generate a CSV file from the flash data stored locally
+*/
+
+enum {
+    icmdReadVersion = 0x01,         // Read sensor firmware version.
+    icmdReadData,                   // Retrieve current sensor data.
+    icmdFlashStart,                 // Start recording data into flash memory.
+    icmdFlashReadPos,               // Read data from a specific flash memory position.
+    icmdFlashEraseFull,             // Erase all data in flash memory.
+    icmdFlashSetSampleSize,         // Set the size of samples to store in flash.
+    icmdFlashStatus,                // Retrieve flash memory operation status.
+    icmdFlashGetData,               // Fetch raw data from flash memory.
+    icmdFlashGenCSV                 // Generate CSV-formatted output from flash data.
+};
 
 int TimeOutClock = 0;               // Global variable to track timeout events
 int I2C_TimeOutClock = 0;           // Global variable to track I2C timeout events
@@ -137,57 +161,57 @@ bool I2C_RcvNewCommand = false;     // Flag indicating whether a new I2C command
 // Delays the execution for a specified number of milliseconds
 void DelayMS(unsigned int delay)
 {
-    // The SysCtlDelay function introduces a delay based on the system clock speed.
-    // The formula ensures the delay is calibrated to milliseconds.
+    // The SysCtlDelay function introduces a delay based on the system clock speed
+    // The formula ensures the delay is calibrated to milliseconds
     SysCtlDelay(( SysCtlClockGet() / 3 / 1000) * delay );
 }
 
 // Clears a specific bit in a number
 uint32_t bit_clear(uint32_t number, uint32_t bit)
 {
-    // Uses bitwise AND and NOT to clear the bit at the specified position.
+    // Uses bitwise AND and NOT to clear the bit at the specified position
     return number & ~((uint32_t)1 << bit);
 }
 
 // Toggles a specific bit in a number
 uint32_t bit_toogle(uint32_t number, uint32_t bit)
 {
-    // Uses bitwise XOR to toggle the bit at the specified position.
+    // Uses bitwise XOR to toggle the bit at the specified position
     return number ^ ((uint32_t)1 << bit);
 }
 
 // Sets a specific bit in a number
 uint32_t bit_set(uint32_t number, uint32_t bit)
 {
-    // Uses bitwise OR to set the bit at the specified position.
+    // Uses bitwise OR to set the bit at the specified position
     return number | ((uint32_t)1 << bit);
 }
 
 // Checks if a specific bit in a number is set
 bool bit_check(uint32_t number, uint32_t bit)
 {
-    // Shifts the bit to the right and checks if it is set (returns true if set).
+    // Shifts the bit to the right and checks if it is set (returns true if set)
     return (number >> bit) & (uint32_t)1;
 }
 
 //*****************************************************************************
 //
 // SysTick Interrupt Handler: Handles system tick interrupts that occur periodically,
-// used for time-based tasks or scheduling.
+// used for time-based tasks or scheduling
 //
 //*****************************************************************************
 
 void SysTickIntHandler(void)
 {
     // Currently empty, the interrupt service routine (ISR) can be filled
-    // to handle periodic tasks triggered by the SysTick timer.
+    // to handle periodic tasks triggered by the SysTick timer
 }
 
 //*****************************************************************************
 //
-// I2C0 Data Slave Interrupt Handler: Handles I2C slave interrupts on I2C0.
+// I2C0 Data Slave Interrupt Handler: Handles I2C slave interrupts on I2C0
 // Triggered when the slave device on I2C0 is addressed or when data is
-// transmitted/received.
+// transmitted/received
 //
 //*****************************************************************************
 
@@ -200,14 +224,14 @@ void I2C0SlaveIntHandler(void)
 //*****************************************************************************
 //
 // SysTick Initialization: Configures the SysTick timer to trigger an interrupt
-// at a rate determined by SYSTICK_TIMING (1ms in this case).
+// at a rate determined by SYSTICK_TIMING (1ms in this case)
 //
 //*****************************************************************************
 
 void Init_Systick (void)
 {
-    // Set the SysTick period based on the system clock speed and the timing setting.
-    // In this case, it will trigger an interrupt every 1 millisecond.
+    // Set the SysTick period based on the system clock speed and the timing setting
+    // In this case, it will trigger an interrupt every 1 millisecond
     SysTickPeriodSet(SysCtlClockGet()/SYSTICK_TIMING);
 
     // Enable the SysTick Interrupt to allow the system to handle SysTick-based tasks
@@ -221,75 +245,75 @@ void Init_Systick (void)
 //
 // I2C Initialization: Configures and initializes the I2C0 peripheral for both
 // master and slave modes, sets up the corresponding GPIO pins, and enables
-// interrupts for I2C communication.
+// interrupts for I2C communication
 //
 //*****************************************************************************
 
 void Init_I2C(void)
 {
-    // Enable the I2C0 peripheral. This must be done before any I2C0 operations
-    // can be performed.
+    // Enable the I2C0 peripheral; must be done before any I2C0 operations
+    // can be performed
     SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C0);
 
-    // Enable GPIO port B, which is required for I2C0 on pins B2 (SCL) and B3 (SDA).
-    // Consult the data sheet if different GPIO pins are used for I2C on your device.
+    // Enable GPIO port B, which is required for I2C0 on pins B2 (SCL) and B3 (SDA)
+    // Consult the data sheet if different GPIO pins are used for I2C on your device
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
 
-    // Configure the pin muxing for I2C0 on pins B2 (SCL) and B3 (SDA).
-    // This is necessary for devices that support pin muxing.
+    // Configure the pin muxing for I2C0 on pins B2 (SCL) and B3 (SDA)
+    // This is necessary for devices that support pin muxing
     GPIOPinConfigure(GPIO_PB2_I2C0SCL);
     GPIOPinConfigure(GPIO_PB3_I2C0SDA);
 
-    // Configure GPIO pins B2 and B3 for I2C operation. These pins are set to
-    // open-drain with weak pull-ups for I2C communication.
+    // Configure GPIO pins B2 and B3 for I2C operation; these pins are set to
+    // open-drain with weak pull-ups for I2C communication
     GPIOPinTypeI2C(GPIO_PORTB_BASE, GPIO_PIN_2 | GPIO_PIN_3);
 
-    // Optional: Enable loopback mode for I2C0. This is useful for debugging
+    // Optional: Enable loopback mode for I2C0; this is useful for debugging
     // as it connects the I2C master and slave internally, allowing testing
-    // without external devices. (Disabled in this case).
+    // without external devices (Disabled in this case)
     // HWREG(I2C0_BASE + I2C_O_MCR) |= 0x01;
 
-    // Enable the I2C0 interrupt in the NVIC (Nested Vectored Interrupt Controller).
-    // This allows the processor to handle I2C interrupts.
+    // Enable the I2C0 interrupt in the NVIC (Nested Vectored Interrupt Controller)
+    // This allows the processor to handle I2C interrupts
     IntEnable(INT_I2C0);
 
-    // Enable the I2C0 slave interrupt. This allows the slave device to interrupt
-    // the processor only when it receives data.
+    // Enable the I2C0 slave interrupt; this allows the slave device to interrupt
+    // the processor only when it receives data
     I2CSlaveIntEnableEx(I2C0_BASE, I2C_SLAVE_INT_DATA);
 
-    // Initialize the I2C0 master module using the system clock.
-    // The third parameter sets the data transfer rate: false for 100kbps, true for 400kbps.
-    // In this case, 100kbps is chosen for communication.
+    // Initialize the I2C0 master module using the system clock
+    // The third parameter sets the data transfer rate: false for 100kbps, true for 400kbps
+    // In this case, 100kbps is chosen for communication
     I2CMasterInitExpClk(I2C0_BASE, SysCtlClockGet(), false);
 
-    // Enable the I2C0 slave module. This prepares I2C0 to operate in slave mode.
+    // Enable the I2C0 slave module; this prepares I2C0 to operate in slave mode
     I2CSlaveEnable(I2C0_BASE);
 
-    // Set the slave address to SLAVE_ADDRESS (defined earlier in the code).
+    // Set the slave address to SLAVE_ADDRESS (defined earlier in the code)
     // In loopback mode, the slave address is arbitrary but typically must be
-    // configured correctly for actual I2C communication.
+    // configured correctly for actual I2C communication
     I2CSlaveInit(I2C0_BASE, SLAVE_ADDRESS);
 }
 
 //*****************************************************************************
 //
 // CAN Communication and Handling Functions: Functions to send and receive messages
-// over the CAN bus, poll for new messages, and handle CAN interrupts. These include:
-// - CANSendINT: Sends 4-byte integer data over CAN.
-// - CANSendMSG: Sends 8-byte array data over CAN.
-// - CANPollCheck: Polls the CAN bus for new messages with a specific ID.
-// - IntCAN0Handler: Handles CAN0 interrupts and processes received messages.
+// over the CAN bus, poll for new messages, and handle CAN interrupts; including:
+// - CANSendINT: Sends 4-byte integer data over CAN
+// - CANSendMSG: Sends 8-byte array data over CAN
+// - CANPollCheck: Polls the CAN bus for new messages with a specific ID
+// - IntCAN0Handler: Handles CAN0 interrupts and processes received messages
 //
 //*****************************************************************************
 
 //*****************************************************************************
 //
-// CANSendINT: Sends a 4-byte integer (uint32_t) message over the CAN bus.
+// CANSendINT: Sends a 4-byte integer (uint32_t) message over the CAN bus
 //
-// \param CANID:        The CAN message ID to send.
-// \param pui8MsgData:  The integer message data to send.
+// \param CANID:        The CAN message ID to send
+// \param pui8MsgData:  The integer message data to send
 //
-// \return 0 if successful, or 0xFFFFFFFF if there is a timeout error.
+// \return 0 if successful, or 0xFFFFFFFF if there is a timeout error
 //
 //*****************************************************************************
 
@@ -316,7 +340,7 @@ uint32_t CANSendINT(unsigned long CANID, uint32_t pui8MsgData)
         // If the timeout exceeds a threshold, return an error code
         if (TimeOut > 0x0001000)
         {
-            return 0xffffffff;  // Timeout error
+            return 0xffffffff;                          // Timeout error
         }
     }
     return 0;  // Success
@@ -324,12 +348,12 @@ uint32_t CANSendINT(unsigned long CANID, uint32_t pui8MsgData)
 
 //*****************************************************************************
 //
-// CANSendMSG: Sends an 8-byte message (array of bytes) over the CAN bus.
+// CANSendMSG: Sends an 8-byte message (array of bytes) over the CAN bus
 //
-// \param CANID:        The CAN message ID to send.
-// \param pui8MsgData:  Pointer to the 8-byte message data to send.
+// \param CANID:        The CAN message ID to send
+// \param pui8MsgData:  Pointer to the 8-byte message data to send
 //
-// \return 0 if successful, or 0xFFFFFFFF if there is a timeout error.
+// \return 0 if successful, or 0xFFFFFFFF if there is a timeout error
 //
 //*****************************************************************************
 
@@ -365,14 +389,14 @@ uint32_t CANSendMSG(unsigned long CANID, uint8_t *pui8MsgData)
 //*****************************************************************************
 //
 // CANPollCheck: Polls the CAN bus for a specific message ID and checks for
-// new data. If new data is available for the specified message ID, it reads
-// the CAN message into a buffer.
+// new data; if new data is available for the specified message ID, it reads
+// the CAN message into a buffer
 //
-// \param candata:  Pointer to the buffer where the received CAN data will be stored.
-// \param MsgID:    The CAN message ID to check for.
+// \param candata:  Pointer to the buffer where the received CAN data will be stored
+// \param MsgID:    The CAN message ID to check for
 // \param Response: (Not used in the function, but could be used for handling specific responses)
 //
-// \return The number of messages received with the specified message ID.
+// \return The number of messages received with the specified message ID
 //
 //*****************************************************************************
 
@@ -393,8 +417,8 @@ uint32_t CANPollCheck(unsigned char *candata, int MsgID, unsigned char Response)
     // Loop while there is new data for the specified message ID (MsgID - 1 due to zero-indexing)
     while (ulNewData & (1 << (MsgID - 1)))
     {
-        // Read the message from the specified message object (MsgID) and store it in sMsgObjectRx.
-        // 'true' indicates that the message should be cleared from the message object after reading.
+        // Read the message from the specified message object (MsgID) and store it in sMsgObjectRx
+        // 'true' indicates that the message should be cleared from the message object after reading
         CANMessageGet(CAN0_BASE, MsgID, &sMsgObjectRx, true);
         rValue++;                           // Increment the counter for each received message
 
@@ -407,9 +431,9 @@ uint32_t CANPollCheck(unsigned char *candata, int MsgID, unsigned char Response)
 
 //*****************************************************************************
 //
-// CAN Interrupt Handler (CAN0): Handles interrupts on the CAN0 interface.
+// CAN Interrupt Handler (CAN0): Handles interrupts on the CAN0 interface
 // It processes incoming CAN messages, checks for message ID matches, and
-// handles overrun conditions.
+// handles overrun conditions
 //
 //*****************************************************************************
 
@@ -428,7 +452,7 @@ void IntCAN0Handler(void)
     ulStatus = CANIntStatus(CAN0_BASE, CAN_INT_STS_CAUSE);
     CANIntClear(CAN0_BASE, ulStatus);
 
-    // If the interrupt is not a controller status interrupt, handle it.
+    // If the interrupt is not a controller status interrupt, handle it
     if (ulStatus != CAN_INT_INTID_STATUS)
     {
         // Get the controller status
@@ -461,7 +485,7 @@ void IntCAN0Handler(void)
                 // Handle broadcast messages (ID 0x7DF)
                 if (tempCANMsgObject.ui32MsgID == 0x7DF)
                 {
-                    // TODO: Search for the module in the list or find an open slot.
+                    // TODO: Search for the module in the list or find an open slot
 
                     // Store the broadcast message details in CAN_MODULES[0]
                     CAN_MODULES[0].ID = (CANMsg[1] << 8) + CANMsg[2];    // Module ID from CAN message
@@ -475,8 +499,8 @@ void IntCAN0Handler(void)
 //*****************************************************************************
 //
 // CAN Listener Setup: Configures a CAN message object to receive messages
-// with the specified message ID (MsgID). It sets up the message object with
-// ID filtering and extended ID settings.
+// with the specified message ID (MsgID); sets up the message object with
+// ID filtering and extended ID settings
 //
 //*****************************************************************************
 
@@ -502,129 +526,129 @@ void CANListnerEX(int MsgID)
 //*****************************************************************************
 //
 // UART Initialization: Configures and initializes the UART0 interface for serial
-// communication. This function sets the UART baud rate, pin configurations,
-// and peripheral function settings.
+// communication; sets the UART baud rate, pin configurations, and peripheral function
+// settings
 //
 //*****************************************************************************
 
 void Init_UART(uint32_t Baud)
 {
-    // Enable the UART0 peripheral and GPIO port A. These are required for the UART
-    // operation and must be enabled before configuring the UART or GPIO pins.
+    // Enable the UART0 peripheral and GPIO port A; required for the UART
+    // operation and must be enabled before configuring the UART or GPIO pins
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);    // Enable UART0 peripheral
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);    // Enable GPIO Port A
 
-    // Configure the pin muxing for the UART0 function on GPIO pins A0 (RX) and A1 (TX).
-    // This allows these pins to be used for UART communication instead of general GPIO.
-    // Consult the datasheet for pin allocation based on the specific device being used.
+    // Configure the pin muxing for the UART0 function on GPIO pins A0 (RX) and A1 (TX)
+    // This allows these pins to be used for UART communication instead of general GPIO
+    // Consult the datasheet for pin allocation based on the specific device being used
     GPIOPinConfigure(GPIO_PA0_U0RX);                // Configure PA0 for UART0 RX
     GPIOPinConfigure(GPIO_PA1_U0TX);                // Configure PA1 for UART0 TX
 
-    // Set the GPIO pins A0 and A1 for UART operation. This configures them as
-    // UART peripheral pins rather than general-purpose I/O.
+    // Set the GPIO pins A0 and A1 for UART operation
+    // This configures them as UART peripheral pins rather than general-purpose I/O
     GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
     // Configure the UART0 module for 8-N-1 operation (8 data bits, no parity, 1 stop bit)
-    // with the specified baud rate. The system clock frequency is used for timing.
+    // with the specified baud rate; the system clock frequency is used for timing
     UARTConfigSetExpClk(SerialBASE, SysCtlClockGet(), Baud, (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 }
 
 //*****************************************************************************
 //
-// CAN Initialization: Configures and initializes the CAN0 interface for communication.
-// This function sets up the CAN baud rate, pin configurations, and interrupts.
+// CAN Initialization: Configures and initializes the CAN0 interface for communication
+// This function sets up the CAN baud rate, pin configurations, and interrupts
 //
 //*****************************************************************************
 
 void Init_CAN(uint32_t Baud)
 {
-    // Enable GPIO Port B and configure pins B4 and B5 for CAN0 operation.
-    // These pins are used for CAN0 RX (receive) and TX (transmit) respectively.
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);    // Enable GPIO Port B
-    GPIOPinConfigure(GPIO_PB4_CAN0RX);              // Configure PB4 for CAN0 RX
-    GPIOPinConfigure(GPIO_PB5_CAN0TX);              // Configure PB5 for CAN0 TX
-    GPIOPinTypeCAN(GPIO_PORTB_BASE, GPIO_PIN_4 | GPIO_PIN_5);  // Set PB4 and PB5 for CAN functionality
+    // Enable GPIO Port B and configure pins B4 and B5 for CAN0 operation
+    // These pins are used for CAN0 RX (receive) and TX (transmit) respectively
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);                // Enable GPIO Port B
+    GPIOPinConfigure(GPIO_PB4_CAN0RX);                          // Configure PB4 for CAN0 RX
+    GPIOPinConfigure(GPIO_PB5_CAN0TX);                          // Configure PB5 for CAN0 TX
+    GPIOPinTypeCAN(GPIO_PORTB_BASE, GPIO_PIN_4 | GPIO_PIN_5);   // Set PB4 and PB5 for CAN functionality
 
-    // Enable CAN0 peripheral and initialize it.
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_CAN0);     // Enable CAN0 peripheral
-    CANInit(CAN0_BASE);                             // Initialize CAN0 module
+    // Enable CAN0 peripheral and initialize it
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_CAN0);                 // Enable CAN0 peripheral
+    CANInit(CAN0_BASE);                                         // Initialize CAN0 module
 
-    // Set the CAN baud rate using the system clock and the specified baud rate.
+    // Set the CAN baud rate using the system clock and the specified baud rate
     CANBitRateSet(CAN0_BASE, SysCtlClockGet(), Baud);
 
-    // Enable CAN interrupts for master, error, and status changes.
+    // Enable CAN interrupts for master, error, and status changes
     CANIntEnable(CAN0_BASE, CAN_INT_MASTER | CAN_INT_ERROR | CAN_INT_STATUS);
 
-    // Enable the CAN0 interrupt in the NVIC (Nested Vectored Interrupt Controller).
+    // Enable the CAN0 interrupt in the NVIC (Nested Vectored Interrupt Controller)
     IntEnable(INT_CAN0);
 
-    // Enable the CAN0 module for operation.
+    // Enable the CAN0 module for operation
     CANEnable(CAN0_BASE);
 
-    // Short delay to ensure CAN setup stability.
+    // Short delay to ensure CAN setup stability
     DelayMS(10);
 
-    // Initialize the CAN listener for receiving broadcast messages on mailbox 1.
-    CANListnerEX(1);                                // Set up listener on mailbox 1 for broadcast reception
+    // Initialize the CAN listener for receiving broadcast messages on mailbox 1
+    CANListnerEX(1);                                            // Set up listener on mailbox 1 for broadcast reception
 
-    // Additional delay to allow CAN listener to be fully initialized.
+    // Additional delay to allow CAN listener to be fully initialized
     DelayMS(10);
 }
 
 //*****************************************************************************
 //
-// I2C_SendData: Sends a 32-bit data word over the I2C bus to a specified slave.
+// I2C_SendData: Sends a 32-bit data word over the I2C bus to a specified slave
 // This function breaks the data into four 8-bit segments and sends them sequentially
-// using I2C burst mode.
+// using I2C burst mode
 //
 //*****************************************************************************
 
 void I2C_SendData(uint32_t SData)
 {
-    // Set the slave address for I2C communication.
-    // 'false' indicates that a write operation is to be performed.
+    // Set the slave address for I2C communication
+    // 'false' indicates that a write operation is to be performed
     I2CMasterSlaveAddrSet(I2C0_BASE, SLAVE_ADDRESS, false);
 
-    // Send the most significant byte (MSB) of the 32-bit data.
+    // Send the most significant byte (MSB) of the 32-bit data
     I2CMasterDataPut(I2C0_BASE, (uint8_t)(SData >> 24));
 
-    // Start the I2C burst transmission.
+    // Start the I2C burst transmission
     I2CMasterControl(I2C0_BASE, I2C_MASTER_CMD_BURST_SEND_START);
 
-    // Wait for the I2C master to finish sending the byte or timeout.
+    // Wait for the I2C master to finish sending the byte or timeout
     I2C_TimeOutClock = I2C_TimeOut;
     while (I2CMasterBusy(I2C0_BASE))
     {
         if (--I2C_TimeOutClock == 0) break;
     }
 
-    // Send the second byte of the 32-bit data.
+    // Send the second byte of the 32-bit data
     I2CMasterDataPut(I2C0_BASE, (uint8_t)(SData >> 16));
     I2CMasterControl(I2C0_BASE, I2C_MASTER_CMD_BURST_SEND_CONT);
 
-    // Wait for the I2C master to finish sending the byte or timeout.
+    // Wait for the I2C master to finish sending the byte or timeout
     I2C_TimeOutClock = I2C_TimeOut;
     while (I2CMasterBusy(I2C0_BASE))
     {
         if (--I2C_TimeOutClock == 0) break;
     }
 
-    // Send the third byte of the 32-bit data.
+    // Send the third byte of the 32-bit data
     I2CMasterDataPut(I2C0_BASE, (uint8_t)(SData >> 8));
     I2CMasterControl(I2C0_BASE, I2C_MASTER_CMD_BURST_SEND_CONT);
 
-    // Wait for the I2C master to finish sending the byte or timeout.
+    // Wait for the I2C master to finish sending the byte or timeout
     I2C_TimeOutClock = I2C_TimeOut;
     while (I2CMasterBusy(I2C0_BASE))
     {
         if (--I2C_TimeOutClock == 0) break;
     }
 
-    // Send the least significant byte (LSB) of the 32-bit data.
+    // Send the least significant byte (LSB) of the 32-bit data
     I2CMasterDataPut(I2C0_BASE, (uint8_t)(SData));
     I2CMasterControl(I2C0_BASE, I2C_MASTER_CMD_BURST_SEND_FINISH);
 
-    // Wait for the I2C master to finish sending the byte or timeout.
+    // Wait for the I2C master to finish sending the byte or timeout
     I2C_TimeOutClock = I2C_TimeOut;
     while (I2CMasterBusy(I2C0_BASE))
     {
@@ -634,11 +658,11 @@ void I2C_SendData(uint32_t SData)
 
 //*****************************************************************************
 //
-// UART String Transmission: Sends a null-terminated string over the UART interface.
+// UART String Transmission: Sends a null-terminated string over the UART interface
 //
-// \param Msg - Pointer to the string to be sent.
+// \param Msg - Pointer to the string to be sent
 //
-// \return The number of characters sent.
+// \return The number of characters sent
 //
 //*****************************************************************************
 
@@ -646,10 +670,10 @@ int UARTStrPut(char *Msg)
 {
     int StrPos = 0;  // Position within the string
 
-    // Loop through each character in the string until the null terminator is encountered.
+    // Loop through each character in the string until the null terminator is encountered
     while (Msg[StrPos] != 0)
     {
-        // Send the current character over the UART interface.
+        // Send the current character over the UART interface
         UARTCharPut(SerialBASE, Msg[StrPos++]);
     }
 
@@ -658,23 +682,23 @@ int UARTStrPut(char *Msg)
 
 //*****************************************************************************
 //
-// UARTHasData: Checks if there is any data available in the UART receive buffer.
+// UARTHasData: Checks if there is any data available in the UART receive buffer
 //
-// \return True if data is available, otherwise false.
+// \return True if data is available, otherwise false
 //
 //*****************************************************************************
 bool UARTHasData()
 {
-    // Check if there are any characters available in the UART0 receive buffer.
+    // Check if there are any characters available in the UART0 receive buffer
     return UARTCharsAvail(UART0_BASE);
 }
 
 //*****************************************************************************
 //
 // UART String Reception (Blocking): Reads a string from the UART interface,
-// blocking until a newline ('\n') or carriage return ('\r') character is received.
+// blocking until a newline ('\n') or carriage return ('\r') character is received
 //
-// \return Pointer to the received string.
+// \return Pointer to the received string
 //
 //*****************************************************************************
 char *UARTStrGet()
@@ -684,40 +708,40 @@ char *UARTStrGet()
 
     do
     {
-        // Block until a character is received from the UART interface.
+        // Block until a character is received from the UART interface
         cThisChar = UARTCharGet(UART0_BASE);
 
-        // Store the received character in the global buffer (RcvString).
+        // Store the received character in the global buffer (RcvString)
         RcvString[StrPos++] = cThisChar;
 
-        // Echo the received character back to the UART (for user feedback).
+        // Echo the received character back to the UART (for user feedback)
         UARTCharPut(UART0_BASE, cThisChar);
 
     }
-    // Continue until a newline ('\n') or carriage return ('\r') is received.
+    // Continue until a newline ('\n') or carriage return ('\r') is received
     while ((cThisChar != '\n') && (cThisChar != '\r'));
 
-    // Return the received string.
+    // Return the received string
     return RcvString;
 }
 
 //*****************************************************************************
 //
-// SendMenu: Displays the main menu over the UART interface. It shows the current
-// system status, detected CAN modules, and a list of available commands.
+// SendMenu: Displays the main menu over the UART interface; shows the current
+// system status, detected CAN modules, and a list of available commands
 //
 //*****************************************************************************
 void SendMenu(void)
 {
-    // Send a welcome message indicating the sensor controller is online.
+    // Send a welcome message indicating the sensor controller is online
     UARTStrPut("\r\nInkley Sensor Controller Online.\r\n");
     UARTStrPut("\r\n");
 
-    // Display the host clock speed in MHz.
+    // Display the host clock speed in MHz
     sprintf(PrintMsg, "\r\nHost Clock: %d MHZ \r\n", SystemClockSpeed / 1000000);
     UARTStrPut(PrintMsg);
 
-    // If a CAN module has been detected, display its ID.
+    // If a CAN module has been detected, display its ID
     if (CAN_MODULES[0].ID > 0)
     {
         sprintf(PrintMsg, "Detected Module: %04X\r\n", CAN_MODULES[0].ID);
@@ -725,10 +749,10 @@ void SendMenu(void)
         CANLastDetected = CAN_MODULES[0].ID;  // Update the last detected CAN module ID
     }
 
-    // Prompt the user to type a command and press enter.
+    // Prompt the user to type a command and press enter
     UARTStrPut("\r\nType command # and press enter.\r\n\r\n");
 
-    // Display the list of available commands.
+    // Display the list of available commands
     UARTStrPut("\r\nCommands:\r\n");
     UARTStrPut("1 - Read Version\r\n");
     UARTStrPut("2 - Sensor Read Data\r\n");
@@ -737,8 +761,10 @@ void SendMenu(void)
     UARTStrPut("5 - Erase Flash\r\n");
     UARTStrPut("6 - Set flash memory sample size\r\n");
     UARTStrPut("7 - Get flash memory status\r\n");
+    UARTStrPut("8 - Get flash memory sample.\r\n");
+    UARTStrPut("9 - Generate a CSV file from flash memory sample.\r\n");
 
-    // Display a prompt (>) for user input.
+    // Display a prompt (>) for user input
     UARTStrPut("\r\n\r\n");
     UARTCharPut(UART0_BASE, '>');
 }
@@ -746,19 +772,19 @@ void SendMenu(void)
 //*****************************************************************************
 //
 // UARTClearScreen: Clears the terminal screen and resets the cursor position
-// using ANSI escape codes. This function is useful for clearing previous output.
+// using ANSI escape codes; this function is useful for clearing previous output
 //
 //*****************************************************************************
 void UARTClearScreen(void)
 {
     char clrBuf[10];
 
-    // Clear the screen using the ANSI escape sequence (ESC[2J).
+    // Clear the screen using the ANSI escape sequence (ESC[2J)
     sprintf(clrBuf, "%c[2J", 0x1b);     // 0x1b is the ASCII code for ESC
     UARTStrPut(clrBuf);
 
     // Move the cursor back to the top-left corner (row 0, column 0) using the
-    // ANSI escape sequence (ESC[0;0H).
+    // ANSI escape sequence (ESC[0;0H)
     sprintf(clrBuf, "%c[0;0H", 0x1b);   // Reset cursor to the home position
     UARTStrPut(clrBuf);
 }
@@ -766,49 +792,54 @@ void UARTClearScreen(void)
 //*****************************************************************************
 //
 // Main Function: Initializes system peripherals (UART, I2C, CAN, etc.), displays
-// a menu to the user, and processes commands entered via UART. It interacts with
+// a menu to the user, and processes commands entered via UART; interacts with
 // the CAN bus to send and receive sensor commands and data, and manages the response
-// processing loop.
+// processing loop
 //
 //*****************************************************************************
 
 int main(void)
 {
-    // Variables for storing CAN received data, message buffer, sample values, and response ID.
-    char CAN_RECV_DATA[20];
-    uint8_t CAN_MSG[8];
-    uint32_t SampleValue = 0;
-    uint8_t CMD_RESPID = 0;
+    // CAN and Data Processing Variables: used for storing CAN message data, processing
+    // responses, managing sensor samples, and formatting output for logging/communication
+    char CAN_RECV_DATA[255];        // Buffer for formatted CAN data output
+    uint8_t CAN_MSG[8];             // Array for CAN message payload
+    uint32_t SampleValue = 0;       // Current sensor sample value
+    uint8_t CMD_RESPID = 0;         // Response ID of the last processed command
+    uint32_t SampleRecv = 0xFFFFFF; // Last received sensor sample (default value)
+    uint32_t lop = 0;               // Auxiliary loop counter
+    uint32_t Flash_Data = 0;        // Data for flash memory operations
+    char CSV_Line[255];             // Buffer for CSV-formatted output
 
-    // Set the system clock to 80MHz (using a 16MHz crystal and PLL).
+    // Set the system clock to 80MHz (using a 16MHz crystal and PLL)
     SysCtlClockSet(SYSCTL_SYSDIV_2_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
-    // Get and store the system clock speed.
+    // Get and store the system clock speed
     SystemClockSpeed = SysCtlClockGet();
 
-    // Initialize system peripherals: SysTick, UART, I2C, and CAN.
+    // Initialize system peripherals: SysTick, UART, I2C, and CAN
     Init_Systick();
     Init_UART(115200);      // UART initialized with 115200 baud rate
     Init_I2C();
     Init_CAN(CAN_BAUD);     // CAN initialized with 500Kbps baud rate
 
-    // Turn on CAN listener for mailbox 1 and initialize the CAN modules.
+    // Turn on CAN listener for mailbox 1 and initialize the CAN modules
     CANListnerEX(1);
     CAN_MODULES[0].ID = 0;
 
-    // Allow some startup time (2 seconds).
+    // Allow some startup time (2 seconds)
     DelayMS(2000);
 
-    // Display the main menu over UART.
+    // Display the main menu over UART
     SendMenu();
 
-    // Main command processing loop.
+    // Main command processing loop
     while (1)
     {
-        // Check if there is data available from the UART.
+        // Check if there is data available from the UART
         if (UARTHasData())
         {
-            // Prepare the CAN message with default values.
+            // Prepare the CAN message with default values
             CAN_MSG[0] = 0;                     // Blank - no command
             CAN_MSG[1] = CAN_ID >> 8;           // #define icmdReadVersion         01  // Command to read the version of the sensor
             CAN_MSG[2] = (uint8_t)CAN_ID;       // #define icmdReadData            02  // Command to read sensor data
@@ -817,11 +848,37 @@ int main(void)
             CAN_MSG[5] = 0;                     // #define icmdFlashEraseFull      05  // Command to erase the entire flash memory
             CAN_MSG[6] = 0;                     // #define icmdFlashSetSampleSize  06  // Command to set the sample size for flash memory
             CAN_MSG[7] = 0;                     // #define icmdFlashStatus         07  // Command to get the status of the flash memory read (e.g., percentage complete)
+            //TODO: Don't we need the below CAN messages prepared? I get a warning when I uncomment 'subscript out of range'
+            //CAN_MSG[8] = 0;                     // #define icmdFlashGetData        08  // Get Flash sample from sensor module and store it locally
+            //CAN_MSG[9] = 0;                     // #define icmdFlashGenCSV         09  // Generate a CSV file from the flash data stored locally
 
-            // Wait for the user to enter a command via UART and process it.
+            // Wait for the user to enter a command via UART and process it
             switch (strtoul(UARTStrGet(), NULL, 0))
             {
-                case icmdReadVersion:           // Read Version Command
+            //*****************************************************************************
+            //
+            // UART Command Processing: Handles user commands entered via UART. Commands
+            // are processed and mapped to corresponding CAN messages sent to the sensor
+            // module. Includes extended functionality for retrieving flash data and
+            // generating CSV files.
+            //
+            // - icmdReadVersion: Requests the firmware version from the sensor module.
+            // - icmdReadData: Requests the latest sensor data sample.
+            // - icmdFlashStart: Initiates recording of sensor data to flash memory.
+            // - icmdFlashReadPos: Retrieves the current read position in flash memory.
+            // - icmdFlashEraseFull: Erases all flash memory data.
+            // - icmdFlashSetSampleSize: Configures the flash memory sample size.
+            // - icmdFlashStatus: Queries the status of flash memory operations.
+            // - icmdFlashGetData: Retrieves stored flash memory samples.
+            // - icmdFlashGenCSV: Generates CSV-formatted output from flash data.
+            //
+            // Each command triggers the corresponding CAN message, and the sensor module
+            // responds with relevant data or an acknowledgment. Additional functionality
+            // like CSV generation adds utility for data export.
+            //
+            //****************************************************************************
+
+            case icmdReadVersion:           // Read Version Command
                     UARTStrPut("Requesting Version from sensor module. \r\n");
                     CAN_MSG[0] = icmdReadVersion;
                     if (CANSendMSG(CAN_SENSOR_ID, CAN_MSG))
@@ -917,6 +974,39 @@ int main(void)
                     }
                     break;
 
+                case icmdFlashGetData:          // Retrieve Flash Memory Samples
+                    UARTStrPut("Requesting flash memory samples from sensor module. \r\n");
+                    CAN_MSG[0] = icmdFlashGetData;
+                    if (CANSendMSG(CAN_SENSOR_ID, CAN_MSG))
+                    {
+                        UARTStrPut("CAN Network Failed! \r\n");
+                    }
+                    else
+                    {
+                        UARTStrPut("Command Sent. \r\n");
+                    }
+                    break;
+
+                case icmdFlashGenCSV:           // Generate CSV from Flash Data
+                    GlobalTimer = 0;
+                    UARTStrPut("CSV BEGIN:\r\n\r\n\r\n");
+
+                    // Add column headers to the CSV output
+                    sprintf(CSV_Line, "TimeStamp,Pressure\r\n");
+                    UARTStrPut(CSV_Line);
+
+                    // Loop through flash memory to generate rows of CSV data
+                    for (lop = FlashUserSpace; lop <= FlashUserSpace + FlashSampleSize; lop += 4)
+                    {
+                        Flash_Data = *((uint32_t *)lop);                            // Read data from flash memory
+                        sprintf(CSV_Line, "%d,%d\r\n", GlobalTimer, Flash_Data);    // Format as CSV
+                        UARTStrPut(CSV_Line);                                       // Send CSV line via UART
+                        GlobalTimer++;                                              // Increment timestamp
+                    }
+
+                    UARTStrPut("\r\n\r\n\r\n CSV END:\r\n");                        // Indicate end of CSV
+                    break;
+
                 default:                        // Unknown Command
                     UARTClearScreen();          // Clear the screen
                     SendMenu();                 // Re-display the menu
@@ -924,13 +1014,13 @@ int main(void)
             }
         }
 
-        // Call the CAN interrupt handler to process incoming CAN messages.
+        // Call the CAN interrupt handler to process incoming CAN messages
         IntCAN0Handler();
 
-        // Check for any changes in the detected CAN module.
+        // Check for any changes in the detected CAN module
         if (CANLastDetected != CAN_MODULES[0].ID)
         {
-            // Optionally re-display the menu if a new CAN module is detected.
+            // Optionally re-display the menu if a new CAN module is detected
             // SendMenu();
         }
 
@@ -939,49 +1029,90 @@ int main(void)
         {
             CMD_RESPID = CAN_RECV.MSG[3];       // Extract the command response ID
 
-            // Combine the message data to form a sample value.
+            // Combine the message data to form a sample value
             SampleValue  =  CAN_RECV.MSG[4] << 24;
             SampleValue +=  CAN_RECV.MSG[5] << 16;
             SampleValue +=  CAN_RECV.MSG[6] << 8;
             SampleValue +=  CAN_RECV.MSG[7];
 
-            // Process the response based on the received command ID.
+            // Process the response based on the received command ID
             switch (CMD_RESPID)
             {
-                case icmdReadVersion:
+                case icmdReadVersion:           // Read Version
                     sprintf(CAN_RECV_DATA, "Module firmware: %d\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
 
-                case icmdReadData:
+                case icmdReadData:              // Read Sensor Data
                     sprintf(CAN_RECV_DATA, "RAW sensor data: %d\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
 
-                case icmdFlashStart:
+                case icmdFlashStart:            // Start recording data into flash
                     sprintf(CAN_RECV_DATA, "Flash Recording Started: %08X\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
 
-                case icmdFlashReadPos:
+                case icmdFlashReadPos:          // Read Flash at position
                     sprintf(CAN_RECV_DATA, "Flash Recording Position: %08X\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
 
-                case icmdFlashEraseFull:
+                case icmdFlashEraseFull:        // Erase Flash
                     sprintf(CAN_RECV_DATA, "Flash Erase Done: %08X\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
 
-                case icmdFlashSetSampleSize:
+                case icmdFlashSetSampleSize:   // Set Flash Sample Size
                     sprintf(CAN_RECV_DATA, "Flash Sample Size Set: %08X\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
 
-                case icmdFlashStatus:
+                case icmdFlashStatus:           // Get flash memory status
                     sprintf(CAN_RECV_DATA, "Flash Start Position Status: %08X\r\n", SampleValue);
                     UARTStrPut(CAN_RECV_DATA);
                     break;
+
+                case icmdFlashGetData:          // Get Flash sample from sensor module and store it locally
+                    if (SampleRecv == 0xFFFFFF)                 // Check if this is the first data packet being received
+                    {
+                        // Display the size of the sample being received
+                        sprintf(CAN_RECV_DATA, "Receiving Sample Data Size: %08X\r\n", SampleValue);
+                        UARTStrPut(CAN_RECV_DATA);
+
+                        // Initialize the flash sample size and starting address
+                        FlashSampleSize = SampleValue;
+                        SampleRecv = FlashUserSpace;
+
+                        // Erase the flash memory at the starting address to prepare for writing
+                        FlashErase(SampleRecv);
+                    }
+                    else
+                    {
+                        if (SampleValue == 0)                   // Check if this is the end of the sample transmission
+                        {
+                            // Reset the sample receiving process
+                            SampleRecv = 0xFFFFFF;
+
+                            // Indicate that the sample reception has completed
+                            sprintf(CAN_RECV_DATA, "Sample Received.\r\n");
+                            UARTStrPut(CAN_RECV_DATA);
+                        }
+                        else
+                        {
+                            // Incrementally erase flash blocks as needed
+                            if ((SampleRecv & 0x7FF) == 0x400)  // Erase flash in 0x400 blocks
+                            {
+                                FlashErase(SampleRecv);
+                            }
+
+                            // Program (write) the received sample value to flash memory
+                            FlashProgram(&SampleValue, SampleRecv += 4, 4);
+                        }
+                    }
+                    break;
+
+                //TODO: Missing case for icmdFlashGenCSV?
 
                 default:
                     sprintf(CAN_RECV_DATA, "Recv Data: %d\r\n", SampleValue);
@@ -989,14 +1120,14 @@ int main(void)
                     break;
             }
 
-            // Clear the new message flag after processing.
+            // Clear the new message flag after processing
             CAN_RECV.FLAGS = bit_clear(CAN_RECV.FLAGS, CAN_F_NEW);
         }
 
-        // Handle CAN message buffer overrun conditions.
+        // Handle CAN message buffer overrun conditions
         if (bit_check(CAN_RECV.FLAGS, CAN_F_OVERRUN))
         {
-            // Clear the overrun flag after detecting the condition.
+            // Clear the overrun flag after detecting the condition
             CAN_RECV.FLAGS = bit_clear(CAN_RECV.FLAGS, CAN_F_OVERRUN);
         }
     }

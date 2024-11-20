@@ -28,6 +28,7 @@ main.obj: ../driverlib/sysctl.h
 main.obj: ../driverlib/uart.h
 main.obj: ../driverlib/i2c.h
 main.obj: ../driverlib/systick.h
+main.obj: ../driverlib/flash.h
 main.obj: ../utils/uartstdio.h
 
 ../main.c:
@@ -85,6 +86,8 @@ main.obj: ../utils/uartstdio.h
 ../driverlib/i2c.h:
 
 ../driverlib/systick.h:
+
+../driverlib/flash.h:
 
 ../utils/uartstdio.h:
 
